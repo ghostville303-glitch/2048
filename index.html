@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>2048 Telegram Mini App</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        :root { --bg: #faf8ef; --grid: #bbada0; --empty: #cdc1b4; }
+        body { background: var(--bg); font-family: sans-serif; display: flex; flex-direction: column; align-items: center; margin: 0; padding: 20px; touch-action: none; }
+        #game-container { background: var(--grid); padding: 10px; border-radius: 6px; }
+        .grid { display: grid; grid-template-columns: repeat(4, 70px); grid-template-rows: repeat(4, 70px); gap: 10px; }
+        .cell { width: 70px; height: 70px; background: var(--empty); border-radius: 3px; display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: bold; color: #776e65; }
+        .tile-2 { background: #eee4da; } .tile-4 { background: #ede0c8; } .tile-8 { background: #f2b179; color: #f9f6f2; }
+        .tile-16 { background: #f59563; color: #f9f6f2; } .tile-32 { background: #f67c5f; color: #f9f6f2; }
+        .tile-64 { background: #f65e3b; color: #f9f6f2; } .tile-128 { background: #edcf72; color: #f9f6f2; font-size: 20px; }
+    </style>
+</head>
+<body>
+    <h1>2048</h1>
+    <div id="score">Score: 0</div>
+    <div id="game-container"><div id="grid" class="grid"></div></div>
+
+    <script>
+        const tg = window.Telegram.WebApp;
+        tg.expand();
+        
+        let board = Array(4).fill().map(() => Array(4).fill(0));
+        let score = 0;
+
+        function init() {
+            const gridDisplay = document.getElementById('grid');
+            gridDisplay.innerHTML = '';
+            for (let i = 0; i < 16; i++) {
+                let cell = document.createElement('div');
+                cell.className = 'cell';
+                gridDisplay.appendChild(cell);
+            }
+            addTile(); addTile(); updateDisplay();
+        }
+
+        function addTile() {
+            let empty = [];
+            for (let r=0; r<4; r++) for (let c=0; c<4; c++) if (board[r][c] === 0) empty.push({r, c});
+            if (empty.length) {
+                let {r, c} = empty[Math.floor(Math.random() * empty.length)];
+                board[r][c] = Math.random() > 0.1 ? 2 : 4;
+            }
+        }
+
+        function updateDisplay() {
+            const cells = document.querySelectorAll('.cell');
+            board.flat().forEach((val, i) => {
+                cells[i].innerText = val || '';
+                cells[i].className = 'cell' + (val ? ` tile-${val}` : '');
+            });
+            document.getElementById('score').innerText = `Score: ${score}`;
+        }
+
+        function slide(row) {
+            let arr = row.filter(val => val);
+            for (let i = 0; i < arr.length - 1; i++) {
+                if (arr[i] === arr[i+1]) {
+                    arr[i] *= 2; score += arr[i];
+                    arr.splice(i+1, 1);
+                }
+            }
+            while (arr.length < 4) arr.push(0);
+            return arr;
+        }
+
+        function move(dir) {
+            let moved = false;
+            let oldBoard = JSON.stringify(board);
+            for (let i = 0; i < 4; i++) {
+                if (dir === 'left' || dir === 'right') {
+                    let row = board[i];
+                    if (dir === 'right') row.reverse();
+                    let newRow = slide(row);
+                    if (dir === 'right') newRow.reverse();
+                    board[i] = newRow;
+                } else {
+                    let col = [board[0][i], board[1][i], board[2][i], board[3][i]];
+                    if (dir === 'down') col.reverse();
+                    let newCol = slide(col);
+                    if (dir === 'down') newCol.reverse();
+                    for (let r = 0; r < 4; r++) board[r][i] = newCol[r];
+                }
+            }
+            if (oldBoard !== JSON.stringify(board)) {
+                addTile(); updateDisplay();
+                if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+            }
+        }
+
+        // Swipe support
+        let startX, startY;
+        document.addEventListener('touchstart', e => { startX = e.touches[0].clientX; startY = e.touches[0].clientY; });
+        document.addEventListener('touchend', e => {
+            let dx = e.changedTouches[0].clientX - startX;
+            let dy = e.changedTouches[0].clientY - startY;
+            if (Math.abs(dx) > Math.abs(dy)) move(dx > 0 ? 'right' : 'left');
+            else move(dy > 0 ? 'down' : 'up');
+        });
+
+        init();
+    </script>
+</body>
+</html>

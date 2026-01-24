@@ -3,12 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>2048 NEON LEGEND v5.0</title>
+    <title>2048 NEON LEGEND v5.5</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
         :root { 
-            --bg: #050505; --grid-bg: rgba(15, 15, 15, 0.85); --cell-empty: rgba(40, 40, 40, 0.5); 
+            --bg: #050505; --grid-bg: rgba(15, 15, 15, 0.9); --cell-empty: rgba(40, 40, 40, 0.5); 
             --accent: #00f2ff; --text: #fff; --bubble-color: #00f2ff;
+        }
+
+        /* THE STICKY FIX: Prevent scrolling and bouncing */
+        html, body { 
+            margin: 0; overflow: hidden; width: 100%; height: 100%; 
+            position: fixed; /* Locks the page in place */
+            background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            touch-action: none; /* Disables all default touch gestures like pull-down */
+            transition: background 0.6s ease;
         }
 
         /* Themes */
@@ -17,26 +27,10 @@
         body.theme-matrix { --bg: #000800; --accent: #00ff41; --bubble-color: #00ff41; }
         body.theme-deepsea { --bg: #020512; --accent: #0077ff; --bubble-color: #4dabf7; }
 
-        html, body { 
-            margin: 0; overflow: hidden; width: 100%; height: 100%; 
-            background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif;
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            touch-action: none; transition: background 0.6s ease;
-        }
-
         /* HEAVY BUBBLE LAYER */
-        #bubble-layer {
-            position: absolute; width: 100%; height: 100%; z-index: -1; 
-            overflow: hidden; pointer-events: none;
-        }
-        .b-obj {
-            position: absolute; background: var(--bubble-color);
-            opacity: 0.45; filter: blur(1px);
-            box-shadow: 0 0 15px var(--bubble-color);
-            pointer-events: none;
-        }
+        #bubble-layer { position: absolute; width: 100%; height: 100%; z-index: -1; overflow: hidden; pointer-events: none; }
+        .b-obj { position: absolute; background: var(--bubble-color); opacity: 0.5; filter: blur(1px); box-shadow: 0 0 15px var(--bubble-color); }
 
-        /* Shape Morphs per Theme */
         .theme-cyber .b-obj { border-radius: 50%; }
         .theme-lava .b-obj { transform: rotate(45deg); border-radius: 15%; }
         .theme-matrix .b-obj { border-radius: 0; width: 3px !important; }
@@ -45,12 +39,12 @@
         /* UI Elements */
         .header { width: 90vw; max-width: 380px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; z-index: 5; }
         .box { background: var(--grid-bg); padding: 10px; border-radius: 12px; border: 2px solid var(--accent); box-shadow: 0 0 15px var(--accent); text-align: center; min-width: 80px; }
-        .label { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #aaa; }
+        .label { font-size: 10px; text-transform: uppercase; color: #aaa; }
         .val { font-size: 20px; font-weight: 900; text-shadow: 0 0 5px var(--text); }
 
         .controls { width: 90vw; max-width: 380px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; z-index: 5; }
         select, button { 
-            background: rgba(0,0,0,0.6); color: var(--accent); border: 2px solid var(--accent); 
+            background: rgba(0,0,0,0.8); color: var(--accent); border: 2px solid var(--accent); 
             padding: 12px; border-radius: 10px; font-weight: bold; font-size: 13px; text-transform: uppercase;
         }
 
@@ -65,19 +59,16 @@
             transition: transform 0.1s, background 0.2s;
         }
 
-        /* Tile Glows */
         .tile-2 { color: #666; font-size: 30px; }
         .tile-4 { color: var(--accent); font-size: 30px; text-shadow: 0 0 10px var(--accent); }
         .tile-8 { background: var(--accent); color: #000; box-shadow: 0 0 20px var(--accent); font-size: 30px; }
-        .tile-16 { background: #ff00ff; color: #fff; box-shadow: 0 0 20px #ff00ff; font-size: 28px; }
-        .tile-32 { background: #ff4d00; color: #fff; box-shadow: 0 0 20px #ff4d00; font-size: 28px; }
 
         .grid-4 .cell { width: 75px; height: 75px; }
         .grid-5 .cell { width: 58px; height: 58px; font-size: 20px !important; }
         .grid-6 .cell { width: 47px; height: 47px; font-size: 16px !important; }
 
         #overlay { 
-            position: absolute; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.9);
+            position: absolute; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.95);
             display: none; flex-direction: column; align-items: center; justify-content: center; border-radius: 15px; z-index: 20;
         }
     </style>
@@ -122,6 +113,8 @@
     <script>
         const tg = window.Telegram.WebApp;
         tg.expand();
+        // Lockdown the swipe down gesture in Telegram
+        tg.isVerticalSwipesEnabled = false;
 
         let board = [], score = 0, size = 5, history = [];
 
@@ -129,34 +122,17 @@
             const layer = document.getElementById('bubble-layer');
             const theme = document.getElementById('theme-sel').value;
             layer.innerHTML = '';
-            
             for(let i=0; i < 30; i++) {
                 const b = document.createElement('div');
                 b.className = 'b-obj';
                 const s = Math.random() * 50 + 15;
-                b.style.width = s + 'px';
-                b.style.height = s + 'px';
+                b.style.width = s + 'px'; b.style.height = s + 'px';
                 b.style.left = Math.random() * 100 + '%';
-                
-                let anim = 'floatU';
-                let dur = Math.random() * 4 + 4;
-                
-                if(theme === 'matrix') {
-                    anim = 'fallD';
-                    b.style.height = (Math.random() * 80 + 40) + 'px';
-                    b.style.top = '-100px';
-                } else if(theme === 'lava') {
-                    anim = 'sparkV';
-                    b.style.bottom = '-20px';
-                    dur = Math.random() * 2 + 1;
-                } else if(theme === 'deepsea') {
-                    anim = 'driftV';
-                    b.style.top = Math.random() * 100 + '%';
-                    b.style.width = (s * 2) + 'px';
-                } else {
-                    b.style.bottom = '-60px';
-                }
-
+                let anim = 'floatU', dur = Math.random() * 4 + 4;
+                if(theme === 'matrix') { anim = 'fallD'; b.style.height = (Math.random() * 80 + 40) + 'px'; b.style.top = '-100px'; }
+                else if(theme === 'lava') { anim = 'sparkV'; b.style.bottom = '-20px'; dur = Math.random() * 2 + 1; }
+                else if(theme === 'deepsea') { anim = 'driftV'; b.style.top = Math.random() * 100 + '%'; b.style.width = (s * 2) + 'px'; }
+                else { b.style.bottom = '-60px'; }
                 b.style.animation = `${anim} ${dur}s infinite linear`;
                 b.style.animationDelay = -(Math.random() * 10) + 's';
                 layer.appendChild(b);
@@ -165,12 +141,15 @@
 
         const anims = document.createElement("style");
         anims.innerText = `
-            @keyframes floatU { from { transform: translateY(0) rotate(0); opacity: 0.6; } to { transform: translateY(-110vh) rotate(360deg); opacity: 0; } }
+            @keyframes floatU { from { transform: translateY(0) rotate(0); opacity: 0.7; } to { transform: translateY(-110vh) rotate(360deg); opacity: 0; } }
             @keyframes fallD { from { transform: translateY(0); opacity: 0.7; } to { transform: translateY(110vh); opacity: 0.1; } }
-            @keyframes driftV { 0%, 100% { transform: translateX(-40px); opacity: 0.4; } 50% { transform: translateX(40px); opacity: 0.6; } }
+            @keyframes driftV { 0%, 100% { transform: translateX(-40px); opacity: 0.5; } 50% { transform: translateX(40px); opacity: 0.7; } }
             @keyframes sparkV { 0% { transform: translateY(0) scale(1.2); opacity: 1; } 100% { transform: translateY(-100vh) scale(0); opacity: 0; } }
         `;
         document.head.appendChild(anims);
+
+        // Prevent scrolling on touch
+        document.addEventListener('touchmove', function(e) { e.preventDefault(); }, { passive: false });
 
         function applyTheme() {
             document.body.className = 'theme-' + document.getElementById('theme-sel').value;
@@ -185,11 +164,8 @@
             document.getElementById('overlay').style.display = 'none';
             document.getElementById('grid').className = `grid grid-${size}`;
             document.getElementById('grid').style.gridTemplateColumns = `repeat(${size}, 1fr)`;
-            
-            // KEY FIX: Tier-specific High Score
             let best = localStorage.getItem(`neon_best_tier_${size}`) || 0;
             document.getElementById('best').innerText = best;
-            
             addTile(); addTile(); render(); spawnVisuals();
         }
 
@@ -222,8 +198,6 @@
                 });
             });
             document.getElementById('score').innerText = score;
-            
-            // KEY FIX: Only update the best score for the CURRENT tier
             let currentBest = localStorage.getItem(`neon_best_tier_${size}`) || 0;
             if(score > currentBest) {
                 localStorage.setItem(`neon_best_tier_${size}`, score);
@@ -245,7 +219,6 @@
             let bBefore = JSON.stringify(board);
             let sBefore = score;
             let bCopy = board.map(r => [...r]);
-
             for (let i = 0; i < size; i++) {
                 let line = (dir==='left' || dir==='right') ? board[i] : board.map(r => r[i]);
                 if (dir==='right' || dir==='down') line.reverse();
@@ -255,12 +228,8 @@
                 }
                 while (arr.length < size) arr.push(0);
                 if (dir==='right' || dir==='down') arr.reverse();
-                for (let j = 0; j < size; j++) {
-                    if (dir==='left' || dir==='right') board[i][j] = arr[j];
-                    else board[j][i] = arr[j];
-                }
+                for (let j = 0; j < size; j++) { if (dir==='left' || dir==='right') board[i][j] = arr[j]; else board[j][i] = arr[j]; }
             }
-
             if (bBefore !== JSON.stringify(board)) {
                 history.push({ board: bCopy, score: sBefore });
                 if (history.length > 20) history.shift();
